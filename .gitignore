@@ -1,0 +1,36 @@
+# CMake and Ninja build output
+/build/
+/build-*/
+/out/
+
+# Driver build output
+driver/x64/
+driver/Debug/
+driver/Release/
+
+# Compiled files
+*.exe
+*.dll
+*.sys
+*.pdb
+*.ilk
+*.obj
+*.o
+*.a
+*.lib
+*.exp
+
+# Generated driver packages
+*.cat
+
+# IDE and editor files
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Local test output
+release/
+recordings/
+dumps/
+logs/
