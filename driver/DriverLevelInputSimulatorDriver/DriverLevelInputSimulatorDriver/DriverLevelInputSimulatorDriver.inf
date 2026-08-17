@@ -4,11 +4,11 @@
 
 [Version]
 Signature   = "$WINDOWS NT$"
-Class       = System ; TODO: specify appropriate Class
-ClassGuid   = {4d36e97d-e325-11ce-bfc1-08002be10318} ; TODO: specify appropriate ClassGuid
+Class       = System
+ClassGuid   = {4d36e97d-e325-11ce-bfc1-08002be10318}
 Provider    = %ManufacturerName%
 CatalogFile = DriverLevelInputSimulatorDriver.cat
-DriverVer   = ; TODO: set DriverVer in stampinf property pages
+DriverVer   =
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -18,45 +18,44 @@ DefaultDestDir = 13
 1 = %DiskName%,,,""
 
 [SourceDisksFiles]
-DriverLevelInputSimulatorDriver.sys = 1,,
-
-;*****************************************
-; Install Section
-;*****************************************
+DriverLevelInputSimulatorDriver.sys = 1
 
 [Manufacturer]
-%ManufacturerName% = Standard,NT$ARCH$.10.0...16299 ; %13% support introduced in build 16299
+%ManufacturerName% = Standard,NTamd64.10.0...16299
 
-[Standard.NT$ARCH$.10.0...16299]
-%DriverLevelInputSimulatorDriver.DeviceDesc% = DriverLevelInputSimulatorDriver_Device, Root\DriverLevelInputSimulatorDriver ; TODO: edit hw-id
+[Standard.NTamd64.10.0...16299]
+%DeviceDescription% = DriverLevelInputSimulatorDriver_Device, Root\DriverLevelInputSimulator
 
 [DriverLevelInputSimulatorDriver_Device.NT]
-CopyFiles = File_Copy
+CopyFiles = DriverCopyFiles
 
-[File_Copy]
+[DriverCopyFiles]
 DriverLevelInputSimulatorDriver.sys
 
-;-------------- Service installation
-[DriverLevelInputSimulatorDriver_Device.NT.Services]
-AddService = DriverLevelInputSimulatorDriver,%SPSVCINST_ASSOCSERVICE%, DriverLevelInputSimulatorDriver_Service_Inst
+[DriverLevelInputSimulatorDriver_Device.NT.HW]
+AddReg = DriverLevelInputSimulatorDriver_Device_AddReg
 
-; -------------- DriverLevelInputSimulatorDriver driver install sections
-[DriverLevelInputSimulatorDriver_Service_Inst]
-DisplayName    = %DriverLevelInputSimulatorDriver.SVCDESC%
-ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
-StartType      = 3               ; SERVICE_DEMAND_START
-ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
-ServiceBinary  = %13%\DriverLevelInputSimulatorDriver.sys
+[DriverLevelInputSimulatorDriver_Device_AddReg]
+HKR,,"LowerFilters",0x00010000,"vhf"
+
+[DriverLevelInputSimulatorDriver_Device.NT.Services]
+AddService = DriverLevelInputSimulatorDriver,0x00000002,DriverLevelInputSimulatorDriver_Service
+
+[DriverLevelInputSimulatorDriver_Service]
+DisplayName   = %ServiceDescription%
+ServiceType   = 1
+StartType     = 3
+ErrorControl  = 1
+ServiceBinary = %13%\DriverLevelInputSimulatorDriver.sys
 
 [DriverLevelInputSimulatorDriver_Device.NT.Wdf]
-KmdfService = DriverLevelInputSimulatorDriver, DriverLevelInputSimulatorDriver_wdfsect
+KmdfService = DriverLevelInputSimulatorDriver,DriverLevelInputSimulatorDriver_Wdf
 
-[DriverLevelInputSimulatorDriver_wdfsect]
+[DriverLevelInputSimulatorDriver_Wdf]
 KmdfLibraryVersion = $KMDFVERSION$
 
 [Strings]
-SPSVCINST_ASSOCSERVICE = 0x00000002
-ManufacturerName = "<Your manufacturer name>" ;TODO: Replace with your manufacturer name
-DiskName = "DriverLevelInputSimulatorDriver Installation Disk"
-DriverLevelInputSimulatorDriver.DeviceDesc = "DriverLevelInputSimulatorDriver Device"
-DriverLevelInputSimulatorDriver.SVCDESC = "DriverLevelInputSimulatorDriver Service"
+ManufacturerName  = "Titus Waldner"
+DiskName          = "DriverLevelInputSimulator Installation Media"
+DeviceDescription = "DriverLevelInputSimulator Virtual HID Source"
+ServiceDescription = "DriverLevelInputSimulator Virtual HID Source Driver"

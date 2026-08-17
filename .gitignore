@@ -34,3 +34,8 @@ release/
 recordings/
 dumps/
 logs/
+
+# Visual Studio and WDK generated output
+driver/**/x64/
+driver/**/ARM64/
+driver/**/*.vcxproj.user
