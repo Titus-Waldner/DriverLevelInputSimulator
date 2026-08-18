@@ -55,7 +55,7 @@ KmdfService = DriverLevelInputSimulatorDriver,DriverLevelInputSimulatorDriver_Wd
 KmdfLibraryVersion = $KMDFVERSION$
 
 [Strings]
-ManufacturerName  = "Titus Waldner"
-DiskName          = "DriverLevelInputSimulator Installation Media"
-DeviceDescription = "DriverLevelInputSimulator Virtual HID Source"
-ServiceDescription = "DriverLevelInputSimulator Virtual HID Source Driver"
+ManufacturerName = "Generic Input Device"
+DiskName = "Generic Virtual Input Device Installation Media"
+DeviceDescription = "Generic Virtual Input Device"
+ServiceDescription = "Generic Virtual Input Device Driver"

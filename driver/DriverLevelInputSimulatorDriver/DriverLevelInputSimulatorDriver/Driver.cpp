@@ -28,8 +28,11 @@ namespace
 
 constexpr UCHAR MouseReportId = 1;
 
-UCHAR MouseReportDescriptor[] =
+UCHAR InputReportDescriptor[] =
 {
+    //
+    // Report ID 1: Five-button relative mouse.
+    //
     0x05, 0x01,       // Usage Page (Generic Desktop)
     0x09, 0x02,       // Usage (Mouse)
     0xA1, 0x01,       // Collection (Application)
@@ -69,8 +72,51 @@ UCHAR MouseReportDescriptor[] =
     0x95, 0x01,       //     Report Count (1)
     0x81, 0x06,       //     Input (Data, Variable, Relative)
 
-    0xC0,             //   End Collection
-    0xC0              // End Collection
+    0xC0,             //   End Physical Collection
+    0xC0,             // End Mouse Application Collection
+
+    //
+    // Report ID 2: Standard six-key keyboard.
+    //
+    0x05, 0x01,       // Usage Page (Generic Desktop)
+    0x09, 0x06,       // Usage (Keyboard)
+    0xA1, 0x01,       // Collection (Application)
+    0x85, 0x02,       //   Report ID (2)
+
+    0x05, 0x07,       //   Usage Page (Keyboard/Keypad)
+    0x19, 0xE0,       //   Usage Minimum (Left Control)
+    0x29, 0xE7,       //   Usage Maximum (Right GUI)
+    0x15, 0x00,       //   Logical Minimum (0)
+    0x25, 0x01,       //   Logical Maximum (1)
+    0x75, 0x01,       //   Report Size (1)
+    0x95, 0x08,       //   Report Count (8)
+    0x81, 0x02,       //   Input (Data, Variable, Absolute)
+
+    0x75, 0x08,       //   Report Size (8)
+    0x95, 0x01,       //   Report Count (1)
+    0x81, 0x03,       //   Input (Constant)
+
+    0x05, 0x08,       //   Usage Page (LEDs)
+    0x19, 0x01,       //   Usage Minimum (Num Lock)
+    0x29, 0x05,       //   Usage Maximum (Kana)
+    0x75, 0x01,       //   Report Size (1)
+    0x95, 0x05,       //   Report Count (5)
+    0x91, 0x02,       //   Output (Data, Variable, Absolute)
+
+    0x75, 0x03,       //   Report Size (3)
+    0x95, 0x01,       //   Report Count (1)
+    0x91, 0x03,       //   Output (Constant)
+
+    0x05, 0x07,       //   Usage Page (Keyboard/Keypad)
+    0x19, 0x00,       //   Usage Minimum (0)
+    0x29, 0x65,       //   Usage Maximum (Keyboard Application)
+    0x15, 0x00,       //   Logical Minimum (0)
+    0x25, 0x65,       //   Logical Maximum (101)
+    0x75, 0x08,       //   Report Size (8)
+    0x95, 0x06,       //   Report Count (6)
+    0x81, 0x00,       //   Input (Data, Array, Absolute)
+
+    0xC0              // End Keyboard Application Collection
 };
 
 #pragma pack(push, 1)
@@ -85,12 +131,22 @@ struct HidMouseReport
     CHAR horizontalWheel;
 };
 
+struct HidKeyboardReport
+{
+    UCHAR reportId;
+    UCHAR modifiers;
+    UCHAR reserved;
+    UCHAR keys[6];
+};
+
 #pragma pack(pop)
 
 static_assert(
     sizeof(HidMouseReport) == 6,
     "HidMouseReport must contain exactly six bytes."
 );
+
+constexpr UCHAR KeyboardReportId = 2;
 
 NTSTATUS CreateControlQueue(
     WDFDEVICE device
@@ -204,8 +260,8 @@ NTSTATUS DriverEvtDeviceAdd(
     VHF_CONFIG_INIT(
         &vhfConfig,
         WdfDeviceWdmGetDeviceObject(device),
-        static_cast<USHORT>(sizeof(MouseReportDescriptor)),
-        MouseReportDescriptor
+        static_cast<USHORT>(sizeof(InputReportDescriptor)),
+		InputReportDescriptor
     );
 
     vhfConfig.VendorID = 0x1209;
@@ -251,55 +307,8 @@ VOID DeviceEvtIoDeviceControl(
 
     WDFDEVICE device;
     DeviceContext* deviceContext;
-    DriverLevelInputSimulator::MouseCommand* command;
-    HidMouseReport report;
     HID_XFER_PACKET transferPacket;
     NTSTATUS status;
-
-    if (ioControlCode !=
-        DriverLevelInputSimulator::IoctlSubmitMouseReport)
-    {
-        WdfRequestComplete(
-            request,
-            STATUS_INVALID_DEVICE_REQUEST
-        );
-
-        return;
-    }
-
-    if (inputBufferLength !=
-        sizeof(DriverLevelInputSimulator::MouseCommand))
-    {
-        WdfRequestComplete(
-            request,
-            STATUS_INVALID_BUFFER_SIZE
-        );
-
-        return;
-    }
-
-    status = WdfRequestRetrieveInputBuffer(
-        request,
-        sizeof(DriverLevelInputSimulator::MouseCommand),
-        reinterpret_cast<PVOID*>(&command),
-        nullptr
-    );
-
-    if (!NT_SUCCESS(status))
-    {
-        WdfRequestComplete(request, status);
-        return;
-    }
-
-    if ((command->buttons & 0xE0U) != 0)
-    {
-        WdfRequestComplete(
-            request,
-            STATUS_INVALID_PARAMETER
-        );
-
-        return;
-    }
 
     device = WdfIoQueueGetDevice(queue);
     deviceContext = GetDeviceContext(device);
@@ -314,29 +323,131 @@ VOID DeviceEvtIoDeviceControl(
         return;
     }
 
-    report.reportId = MouseReportId;
-    report.buttons = command->buttons;
-    report.movementX = command->movementX;
-    report.movementY = command->movementY;
-    report.verticalWheel = command->verticalWheel;
-    report.horizontalWheel = command->horizontalWheel;
+    if (ioControlCode ==
+        DriverLevelInputSimulator::IoctlSubmitMouseReport)
+    {
+        DriverLevelInputSimulator::MouseCommand* command;
+        HidMouseReport report;
 
-    transferPacket.reportBuffer =
-        reinterpret_cast<PUCHAR>(&report);
+        if (inputBufferLength !=
+            sizeof(DriverLevelInputSimulator::MouseCommand))
+        {
+            WdfRequestComplete(
+                request,
+                STATUS_INVALID_BUFFER_SIZE
+            );
 
-    transferPacket.reportBufferLen =
-        static_cast<ULONG>(sizeof(report));
+            return;
+        }
 
-    transferPacket.reportId = MouseReportId;
+        status = WdfRequestRetrieveInputBuffer(
+            request,
+            sizeof(DriverLevelInputSimulator::MouseCommand),
+            reinterpret_cast<PVOID*>(&command),
+            nullptr
+        );
 
-    status = VhfReadReportSubmit(
-        deviceContext->vhfHandle,
-        &transferPacket
+        if (!NT_SUCCESS(status))
+        {
+            WdfRequestComplete(request, status);
+            return;
+        }
+
+        if ((command->buttons & 0xE0U) != 0)
+        {
+            WdfRequestComplete(
+                request,
+                STATUS_INVALID_PARAMETER
+            );
+
+            return;
+        }
+
+        report.reportId = MouseReportId;
+        report.buttons = command->buttons;
+        report.movementX = command->movementX;
+        report.movementY = command->movementY;
+        report.verticalWheel = command->verticalWheel;
+        report.horizontalWheel = command->horizontalWheel;
+
+        transferPacket.reportBuffer =
+            reinterpret_cast<PUCHAR>(&report);
+
+        transferPacket.reportBufferLen =
+            static_cast<ULONG>(sizeof(report));
+
+        transferPacket.reportId = MouseReportId;
+
+        status = VhfReadReportSubmit(
+            deviceContext->vhfHandle,
+            &transferPacket
+        );
+
+        WdfRequestComplete(request, status);
+        return;
+    }
+
+    if (ioControlCode ==
+        DriverLevelInputSimulator::IoctlSubmitKeyboardReport)
+    {
+        DriverLevelInputSimulator::KeyboardCommand* command;
+        HidKeyboardReport report;
+
+        if (inputBufferLength !=
+            sizeof(DriverLevelInputSimulator::KeyboardCommand))
+        {
+            WdfRequestComplete(
+                request,
+                STATUS_INVALID_BUFFER_SIZE
+            );
+
+            return;
+        }
+
+        status = WdfRequestRetrieveInputBuffer(
+            request,
+            sizeof(DriverLevelInputSimulator::KeyboardCommand),
+            reinterpret_cast<PVOID*>(&command),
+            nullptr
+        );
+
+        if (!NT_SUCCESS(status))
+        {
+            WdfRequestComplete(request, status);
+            return;
+        }
+
+        report.reportId = KeyboardReportId;
+        report.modifiers = command->modifiers;
+        report.reserved = 0;
+
+        for (ULONG index = 0; index < 6; ++index)
+        {
+            report.keys[index] = command->keys[index];
+        }
+
+        transferPacket.reportBuffer =
+            reinterpret_cast<PUCHAR>(&report);
+
+        transferPacket.reportBufferLen =
+            static_cast<ULONG>(sizeof(report));
+
+        transferPacket.reportId = KeyboardReportId;
+
+        status = VhfReadReportSubmit(
+            deviceContext->vhfHandle,
+            &transferPacket
+        );
+
+        WdfRequestComplete(request, status);
+        return;
+    }
+
+    WdfRequestComplete(
+        request,
+        STATUS_INVALID_DEVICE_REQUEST
     );
-
-    WdfRequestComplete(request, status);
 }
-
 VOID DeviceEvtCleanup(
     WDFOBJECT deviceObject
 )
