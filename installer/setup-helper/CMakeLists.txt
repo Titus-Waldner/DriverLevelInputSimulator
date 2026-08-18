@@ -29,4 +29,12 @@ if(MINGW)
             -Wextra
             -Wpedantic
     )
+
+    target_link_options(
+        GenericInputDeviceSetup
+        PRIVATE
+            -static
+            -static-libgcc
+            -static-libstdc++
+    )
 endif()

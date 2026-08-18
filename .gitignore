@@ -39,3 +39,8 @@ logs/
 driver/**/x64/
 driver/**/ARM64/
 driver/**/*.vcxproj.user
+
+# Installer staging and generated packages
+installer/staging/
+installer/output/
+build-release/

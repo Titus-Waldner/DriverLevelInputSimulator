@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <cwchar>
+#include <cstring>
 
 namespace
 {
@@ -581,13 +582,27 @@ int UninstallDevices()
         return EXIT_FAILURE;
     }
 
-    const auto diUninstallDevice =
-        reinterpret_cast<DiUninstallDeviceFunction>(
-            GetProcAddress(
-                newDevLibrary,
-                "DiUninstallDevice"
-            )
-        );
+
+
+	DiUninstallDeviceFunction diUninstallDevice = nullptr;
+
+	const FARPROC uninstallProcedure = GetProcAddress(
+		newDevLibrary,
+		"DiUninstallDevice"
+	);
+
+	static_assert(
+		sizeof(diUninstallDevice) == sizeof(uninstallProcedure),
+		"Function pointer sizes must match."
+	);
+
+std::memcpy(
+    &diUninstallDevice,
+    &uninstallProcedure,
+    sizeof(diUninstallDevice)
+);
+
+
 
     if (diUninstallDevice == nullptr)
     {

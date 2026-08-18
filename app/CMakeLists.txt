@@ -24,4 +24,12 @@ if(MINGW)
             -Wextra
             -Wpedantic
     )
+
+    target_link_options(
+        DriverLevelInputSimulator
+        PRIVATE
+            -static
+            -static-libgcc
+            -static-libstdc++
+    )
 endif()
