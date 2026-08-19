@@ -1,5 +1,5 @@
 #define AppName "Generic Virtual Input Device"
-#define AppVersion "0.1.0"
+#define AppVersion "0.2.0"
 #define AppPublisher "Generic Input Device"
 #define AppExecutable "DriverLevelInputSimulator.exe"
 #define SetupHelper "GenericInputDeviceSetup.exe"

@@ -12,6 +12,7 @@ The controller communicates with a KMDF kernel driver by using `DeviceIoControl`
 ### Virtual mouse
 
 - Relative X and Y movement
+- Absolute positioning on the primary monitor
 - Left, right, and middle click
 - Back and forward buttons
 - Button-down and button-up reports
@@ -121,7 +122,7 @@ Restart Windows afterward. Secure Boot can then be re-enabled in UEFI/BIOS if de
 Run:
 
 ```text
-GenericVirtualInputDevice-Setup-0.1.0-test-x64.exe
+GenericVirtualInputDevice-Setup-0.2.0-test-x64.exe
 ```
 
 The installer will:
@@ -145,6 +146,16 @@ DriverLevelInputSimulator.exe move -20 15
 ```
 
 Movement values must be between `-127` and `127` per report.
+
+### Absolute mouse positioning
+
+Move the pointer to a specific pixel on the primary monitor:
+
+```text
+DriverLevelInputSimulator.exe move-to 0 0
+DriverLevelInputSimulator.exe move-to 1280 720
+DriverLevelInputSimulator.exe move-to 2559 1439
+```
 
 ### Mouse clicks
 
@@ -284,7 +295,7 @@ The current test uninstaller leaves the test certificate and staged driver-store
 
 ## Release status
 
-Version `0.1.0-test` is intended for development evaluation only.
+Version `0.2.0-test` is intended for development evaluation only.
 
 Before publishing a release, verify:
 
