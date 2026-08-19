@@ -600,11 +600,220 @@ int RunReleaseAllCommand(
     return EXIT_SUCCESS;
 }
 
+bool ParseScreenCoordinate(
+    const char* text,
+    long& coordinate
+)
+{
+    char* end = nullptr;
+
+    errno = 0;
+
+    const long parsedValue = std::strtol(
+        text,
+        &end,
+        10
+    );
+
+    if (errno != 0 ||
+        end == text ||
+        *end != '\0')
+    {
+        return false;
+    }
+
+    coordinate = parsedValue;
+    return true;
+}
+
+unsigned short NormalizeScreenCoordinate(
+    long pixelCoordinate,
+    long pixelCount
+)
+{
+    constexpr unsigned long long AbsoluteMaximum =
+        32767ULL;
+
+    if (pixelCount <= 1)
+    {
+        return 1;
+    }
+
+    const unsigned long long numerator =
+        static_cast<unsigned long long>(pixelCoordinate) *
+        AbsoluteMaximum;
+
+    const unsigned long long denominator =
+        static_cast<unsigned long long>(pixelCount - 1);
+
+    unsigned long long normalizedCoordinate =
+        (numerator + denominator / 2) /
+        denominator;
+
+    if (normalizedCoordinate == 0)
+    {
+        normalizedCoordinate = 1;
+    }
+
+    return static_cast<unsigned short>(
+        normalizedCoordinate
+    );
+}
+
+bool SubmitAbsoluteMouseCommand(
+    HANDLE device,
+    const DriverLevelInputSimulator::AbsoluteMouseCommand& command
+)
+{
+    DWORD bytesReturned = 0;
+
+    const BOOL result = DeviceIoControl(
+        device,
+        DriverLevelInputSimulator::IoctlSubmitAbsoluteMouseReport,
+        const_cast<
+            DriverLevelInputSimulator::AbsoluteMouseCommand*
+        >(&command),
+        static_cast<DWORD>(sizeof(command)),
+        nullptr,
+        0,
+        &bytesReturned,
+        nullptr
+    );
+
+    if (!result)
+    {
+        std::cerr
+            << "The driver rejected the absolute mouse report. "
+            << "Windows error: "
+            << GetLastError()
+            << '\n';
+
+        return false;
+    }
+
+    return true;
+}
+
+int RunMoveToCommand(
+    HANDLE device,
+    const char* xText,
+    const char* yText
+)
+{
+    long pixelX = 0;
+    long pixelY = 0;
+
+    if (!ParseScreenCoordinate(xText, pixelX) ||
+        !ParseScreenCoordinate(yText, pixelY))
+    {
+        std::cerr
+            << "Absolute coordinates must be integers.\n";
+
+        return EXIT_FAILURE;
+    }
+
+    const int screenWidth = GetSystemMetrics(
+        SM_CXSCREEN
+    );
+
+    const int screenHeight = GetSystemMetrics(
+        SM_CYSCREEN
+    );
+
+    if (screenWidth <= 0 ||
+        screenHeight <= 0)
+    {
+        std::cerr
+            << "Unable to determine the primary monitor size.\n";
+
+        return EXIT_FAILURE;
+    }
+
+    if (pixelX < 0 ||
+        pixelX >= screenWidth ||
+        pixelY < 0 ||
+        pixelY >= screenHeight)
+    {
+        std::cerr
+            << "Coordinates are outside the primary monitor.\n"
+            << "Valid X range: 0 through "
+            << (screenWidth - 1)
+            << '\n'
+            << "Valid Y range: 0 through "
+            << (screenHeight - 1)
+            << '\n';
+
+        return EXIT_FAILURE;
+    }
+
+    const unsigned short normalizedX =
+        NormalizeScreenCoordinate(
+            pixelX,
+            screenWidth
+        );
+
+    const unsigned short normalizedY =
+        NormalizeScreenCoordinate(
+            pixelY,
+            screenHeight
+        );
+
+    const DriverLevelInputSimulator::AbsoluteMouseCommand command
+    {
+        0,
+        normalizedX,
+        normalizedY
+    };
+
+    if (!SubmitAbsoluteMouseCommand(
+        device,
+        command
+    ))
+    {
+        return EXIT_FAILURE;
+    }
+
+    Sleep(10);
+
+    POINT observedPosition {};
+
+    if (!GetCursorPos(&observedPosition))
+    {
+        std::cerr
+            << "The report was submitted, but GetCursorPos failed. "
+            << "Windows error: "
+            << GetLastError()
+            << '\n';
+
+        return EXIT_FAILURE;
+    }
+
+    std::cout
+        << "Submitted absolute mouse position: "
+        << pixelX
+        << ", "
+        << pixelY
+        << '\n'
+        << "Normalized HID position: "
+        << normalizedX
+        << ", "
+        << normalizedY
+        << '\n'
+        << "Observed cursor position: "
+        << observedPosition.x
+        << ", "
+        << observedPosition.y
+        << '\n';
+
+    return EXIT_SUCCESS;
+}
+
 void PrintUsage()
 {
     std::cout
         << "Usage:\n"
         << "  DriverLevelInputSimulator move <x> <y>\n"
+		<< "Absolute coordinates apply to the primary monitor.\n"
         << "  DriverLevelInputSimulator click <button>\n"
         << "  DriverLevelInputSimulator button-down <button>\n"
         << "  DriverLevelInputSimulator button-up <button>\n"
@@ -632,6 +841,15 @@ int ProcessCommand(
 )
 {
     const std::string command = argumentValues[1];
+	if (command == "move-to" &&
+        argumentCount == 4)
+    {
+        return RunMoveToCommand(
+            device,
+            argumentValues[2],
+            argumentValues[3]
+        );
+    }
 
     if (command == "release-all" &&
         argumentCount == 2)

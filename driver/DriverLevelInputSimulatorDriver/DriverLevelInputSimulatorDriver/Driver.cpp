@@ -27,6 +27,8 @@ namespace
 {
 
 constexpr UCHAR MouseReportId = 1;
+constexpr UCHAR KeyboardReportId = 2;
+constexpr UCHAR AbsoluteMouseReportId = 3;
 
 UCHAR InputReportDescriptor[] =
 {
@@ -75,6 +77,44 @@ UCHAR InputReportDescriptor[] =
     0xC0,             //   End Physical Collection
     0xC0,             // End Mouse Application Collection
 
+
+	//
+    // Report ID 3: Five-button absolute mouse.
+    //
+    0x05, 0x01,       // Usage Page (Generic Desktop)
+    0x09, 0x02,       // Usage (Mouse)
+    0xA1, 0x01,       // Collection (Application)
+    0x85, 0x03,       //   Report ID (3)
+
+    0x09, 0x01,       //   Usage (Pointer)
+    0xA1, 0x00,       //   Collection (Physical)
+
+    0x05, 0x09,       //     Usage Page (Button)
+    0x19, 0x01,       //     Usage Minimum (Button 1)
+    0x29, 0x05,       //     Usage Maximum (Button 5)
+    0x15, 0x00,       //     Logical Minimum (0)
+    0x25, 0x01,       //     Logical Maximum (1)
+    0x75, 0x01,       //     Report Size (1)
+    0x95, 0x05,       //     Report Count (5)
+    0x81, 0x02,       //     Input (Data, Variable, Absolute)
+
+    0x75, 0x03,       //     Report Size (3)
+    0x95, 0x01,       //     Report Count (1)
+    0x81, 0x03,       //     Input (Constant, Variable, Absolute)
+
+    0x05, 0x01,       //     Usage Page (Generic Desktop)
+    0x09, 0x30,       //     Usage (X)
+    0x09, 0x31,       //     Usage (Y)
+    0x15, 0x00,       //     Logical Minimum (0)
+    0x26, 0xFF, 0x7F, //     Logical Maximum (32767)
+    0x75, 0x10,       //     Report Size (16)
+    0x95, 0x02,       //     Report Count (2)
+    0x81, 0x02,       //     Input (Data, Variable, Absolute)
+
+    0xC0,             //   End Physical Collection
+    0xC0,             // End Absolute Mouse Application Collection
+
+
     //
     // Report ID 2: Standard six-key keyboard.
     //
@@ -117,6 +157,8 @@ UCHAR InputReportDescriptor[] =
     0x81, 0x00,       //   Input (Data, Array, Absolute)
 
     0xC0              // End Keyboard Application Collection
+	
+	
 };
 
 #pragma pack(push, 1)
@@ -139,6 +181,14 @@ struct HidKeyboardReport
     UCHAR keys[6];
 };
 
+struct HidAbsoluteMouseReport
+{
+    UCHAR reportId;
+    UCHAR buttons;
+    USHORT positionX;
+    USHORT positionY;
+};
+
 #pragma pack(pop)
 
 static_assert(
@@ -146,7 +196,10 @@ static_assert(
     "HidMouseReport must contain exactly six bytes."
 );
 
-constexpr UCHAR KeyboardReportId = 2;
+static_assert(
+    sizeof(HidAbsoluteMouseReport) == 6,
+    "HidAbsoluteMouseReport must contain exactly six bytes."
+);
 
 NTSTATUS CreateControlQueue(
     WDFDEVICE device
@@ -377,6 +430,68 @@ VOID DeviceEvtIoDeviceControl(
             static_cast<ULONG>(sizeof(report));
 
         transferPacket.reportId = MouseReportId;
+
+        status = VhfReadReportSubmit(
+            deviceContext->vhfHandle,
+            &transferPacket
+        );
+
+        WdfRequestComplete(request, status);
+        return;
+    }
+	
+    if (ioControlCode == DriverLevelInputSimulator::IoctlSubmitAbsoluteMouseReport)
+    {
+        DriverLevelInputSimulator::AbsoluteMouseCommand* command;
+        HidAbsoluteMouseReport report;
+
+        if (inputBufferLength !=
+            sizeof(DriverLevelInputSimulator::AbsoluteMouseCommand))
+        {
+            WdfRequestComplete(
+                request,
+                STATUS_INVALID_BUFFER_SIZE
+            );
+
+            return;
+        }
+
+        status = WdfRequestRetrieveInputBuffer(
+            request,
+            sizeof(DriverLevelInputSimulator::AbsoluteMouseCommand),
+            reinterpret_cast<PVOID*>(&command),
+            nullptr
+        );
+
+        if (!NT_SUCCESS(status))
+        {
+            WdfRequestComplete(request, status);
+            return;
+        }
+
+        if ((command->buttons & 0xE0U) != 0)
+        {
+            WdfRequestComplete(
+                request,
+                STATUS_INVALID_PARAMETER
+            );
+
+            return;
+        }
+
+        report.reportId = AbsoluteMouseReportId;
+        report.buttons = command->buttons;
+        report.positionX = command->positionX;
+        report.positionY = command->positionY;
+
+        transferPacket.reportBuffer =
+            reinterpret_cast<PUCHAR>(&report);
+
+        transferPacket.reportBufferLen =
+            static_cast<ULONG>(sizeof(report));
+
+        transferPacket.reportId =
+            AbsoluteMouseReportId;
 
         status = VhfReadReportSubmit(
             deviceContext->vhfHandle,
